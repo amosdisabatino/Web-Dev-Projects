@@ -1,15 +1,17 @@
 'use server'
 import { cookies } from 'next/headers';
-import { pool } from '@/lib/db';
 import bcrypt from 'bcrypt';
+import { prisma } from '@/lib/db';
 
 export async function loginUser(formData: FormData) {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
     try{
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        const user = result.rows[0];
-
+        const user = await prisma.users.findUnique({
+            where: {
+                email: email,
+            }
+        })
         if (user && await bcrypt.compare(password, user.password_hash)) {
             const cookieStore = await cookies();
             cookieStore.set('session', 'tuo_jwt_token_qui',{
@@ -26,12 +28,18 @@ export async function loginUser(formData: FormData) {
 }
 
 export async function registerUser(formData: FormData) {
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    const rawData = Object.fromEntries(formData.entries());
+    const { password, ...regData } = rawData;
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query('INSERT INTO users (email, password_hash) VALUES ($1, $2)', [email, hashedPassword]);
-        return { success: true, message: "User registered successfully" };
+        const hashPassword = await bcrypt.hash(password as string, 10);
+        await prisma.users.create({
+            data: {
+                ...(regData as any),
+                // email: regData.email as string, 
+                password_hash: hashPassword,
+            }
+        });
+        return { success: true, message: "Register Done." };
     } catch (error) {
         return { success: false, message: "An error occurred during registration." };
     }
