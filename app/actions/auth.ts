@@ -35,7 +35,6 @@ export async function registerUser(formData: FormData) {
         await prisma.users.create({
             data: {
                 ...(regData as any),
-                // email: regData.email as string, 
                 password_hash: hashPassword,
             }
         });
