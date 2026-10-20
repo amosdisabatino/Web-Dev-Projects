@@ -1,14 +1,22 @@
 'use client'
 import { loginUser } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function Login() {
 
     const [message, setMessage] = useState('');
+    const router = useRouter();
 
     async function clientSubmit(formData: FormData) {
         const response = await loginUser(formData);
-        setMessage(response.message || '');
+        if (response.success){
+            router.push('/');
+            router.refresh();
+        }
+        else {
+            setMessage(response.message || '');
+        }
     }
 
     return(

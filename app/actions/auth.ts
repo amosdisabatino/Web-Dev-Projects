@@ -2,6 +2,27 @@
 import { cookies } from 'next/headers';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/db';
+import { jwtVerify, SignJWT } from 'jose';
+
+export async function getUserSession() {
+    const cookiestore = await cookies();
+    const token = cookiestore.get('session')?.value;
+    if (! token) return null;
+    try {
+        const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+        const { payload } = await jwtVerify(token, secret);
+        const userMail = payload.email as string;
+        const user = await prisma.users.findUnique({
+            where : { email: userMail },
+            omit: {
+                password_hash: true,
+            }
+        });
+        return user;
+    } catch (error) {
+        return null;
+    }
+}
 
 export async function loginUser(formData: FormData) {
     const email = formData.get('email') as string;
@@ -13,8 +34,14 @@ export async function loginUser(formData: FormData) {
             }
         })
         if (user && await bcrypt.compare(password, user.password_hash)) {
+            const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+            const token = await new SignJWT({ email: user.email })
+                .setProtectedHeader({alg:'HS256'})
+                .setIssuedAt()
+                .setExpirationTime('24h')
+                .sign(secret);
             const cookieStore = await cookies();
-            cookieStore.set('session', 'tuo_jwt_token_qui',{
+            cookieStore.set('session', token,{
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 maxAge: 60 * 60 * 24,
