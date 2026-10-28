@@ -2,7 +2,18 @@
 import { cookies } from 'next/headers';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/db';
+import { redirect } from 'next/navigation';
+import { revalidatePath } from "next/cache";
 import { jwtVerify, SignJWT } from 'jose';
+
+function getIsoDate(rawDate: string) {
+    if (rawDate) {
+        const isoDate = new Date(rawDate).toISOString();
+        return isoDate;
+    } else {
+        return false;
+    }
+}
 
 export async function getUserSession() {
     const cookiestore = await cookies();
@@ -54,19 +65,58 @@ export async function loginUser(formData: FormData) {
     }
 }
 
+export async function logoutUser() {
+    const cookiesStore = await cookies();
+    cookiesStore.delete('session');
+    redirect('/');
+}
+
 export async function registerUser(formData: FormData) {
     const rawData = Object.fromEntries(formData.entries());
-    const { password, ...regData } = rawData;
+    const { password, confirm_password, date_birth, ...regData } = rawData;
+    const isoDate = getIsoDate(date_birth as string);
     try {
         const hashPassword = await bcrypt.hash(password as string, 10);
         await prisma.users.create({
             data: {
                 ...(regData as any),
                 password_hash: hashPassword,
+                date_birth: isoDate,
             }
         });
         return { success: true, message: "Register Done." };
     } catch (error) {
         return { success: false, message: "An error occurred during registration." };
+    }
+}
+
+export async function updateUser(formData: FormData) {
+    const userSession = await getUserSession();
+    if (userSession) {
+        const rawData = Object.fromEntries(formData.entries());
+        Object.keys(rawData).forEach(key => {
+            if (key.startsWith('$')) {
+                delete rawData[key];
+            }
+        });
+        const { date_birth, ...updData } = rawData;
+        const isoDate = getIsoDate(date_birth as string);
+        try{
+            await prisma.users.update({
+                where: {
+                    email: userSession.email,
+                },
+                data: {
+                    ...(updData as any),
+                    date_birth: isoDate,
+                }
+            });
+            revalidatePath('/profile');
+            return { success: true};
+        } catch (error) {
+            return { success: false, message: "An error occurred during update." }
+        }
+    } else {
+        return { success: false, message: "User not authorized." }
     }
 }

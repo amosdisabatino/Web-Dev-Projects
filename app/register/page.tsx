@@ -14,7 +14,7 @@ export default function Register() {
     return (
         <main className="max-w-md mx-auto mt-12 p-6 bg-white rounded-xl shadow-md">
             <h1 className="text-2xl font-bold mb-6 text-slate-800">Create Account</h1>
-            <form action={clientSubmit}className="space-y-4">
+            <form action={clientSubmit} className="space-y-4">
                 <div className="flex gap-4">
                     <div className="flex-1">
                         <label className="block text-sm font-medium text-slate-700 mb-1">Name:</label>
