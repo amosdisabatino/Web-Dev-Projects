@@ -1,4 +1,5 @@
 'use server'
+import { checkPassword } from '@/lib/validation';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/db';
@@ -75,6 +76,10 @@ export async function registerUser(formData: FormData) {
     const rawData = Object.fromEntries(formData.entries());
     const { password, confirm_password, date_birth, ...regData } = rawData;
     const isoDate = getIsoDate(date_birth as string);
+    const pwdCheck = checkPassword(password as string, confirm_password as string);
+    if (!pwdCheck.pwdValid) {
+        return { success: false, message: pwdCheck.message };
+    }
     try {
         const hashPassword = await bcrypt.hash(password as string, 10);
         await prisma.users.create({
