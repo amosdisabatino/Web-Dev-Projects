@@ -1,4 +1,5 @@
 'use client';
+import Link from "next/link"; 
 
 export default function UserForm({mode, initialData, onSubmit, message, pwdmessage}: {mode: 'register' | 'update', initialData?: any, onSubmit: any, message?: string, pwdmessage?: string}) {
 
@@ -44,17 +45,22 @@ export default function UserForm({mode, initialData, onSubmit, message, pwdmessa
                             </div>
                         </div>
                         {pwdmessage && <p className="text-red-600 text-sm mt-2">{pwdmessage}</p>}
-                        <button type="submit" className="bg-blue-600 text-white p-2 rounded">Register</button>
                         {message && <p className="mt-4 text-sm">{message}</p>}
+                        <div className="flex gap-4">
+                            <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Register</button>
+                            <Link href="/" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Back Home</Link>
+                        </div>
                     </>
                 )
             }
             {
                 mode === 'update' && (
-                    <button type="submit" className="bg-blue-600 text-white p-2 rounded">Update Values</button>
+                    <div className="flex gap-4">
+                        <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Update Values</button>
+                        <Link href="/" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Back Home</Link>
+                    </div>
                 )
             }
-            
         </form>
     );
 

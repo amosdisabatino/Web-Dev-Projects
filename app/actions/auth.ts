@@ -16,6 +16,26 @@ function getIsoDate(rawDate: string) {
     }
 }
 
+export async function deleteUser() {
+    const userSession = await getUserSession();
+    if (userSession) {
+        try {
+            await prisma.users.delete({
+                where: {
+                    email: userSession.email,
+                }
+            });
+            const cookiesStore = await cookies();
+            cookiesStore.delete('session');
+            redirect('/');
+        } catch (error) {
+            return { success: false, message: "An error occurred during deletion." }
+        }
+    } else {
+        return { success: false, message: "User not authorized." }
+    }
+}
+
 export async function getUserSession() {
     const cookiestore = await cookies();
     const token = cookiestore.get('session')?.value;
