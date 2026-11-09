@@ -16,6 +16,43 @@ function getIsoDate(rawDate: string) {
     }
 }
 
+export async function changePassword(formData: FormData){
+    const oldPassword = formData.get('old_password') as string;
+    const password = formData.get('new_password') as string;
+    const confirm_password = formData.get('confirm_new_password') as string;
+    const userSession = await getUserSession();
+    if (userSession){
+        try{
+            const user = await prisma.users.findUnique({
+                where: {
+                    email: userSession.email,
+                }
+            })
+            if (!user || !(await bcrypt.compare(oldPassword, user.password_hash))) {
+                return {success: false, message: "The Current Password Is Incorrect.",};
+            }
+            const pwdCheck = checkPassword(password, confirm_password);
+            if (!pwdCheck.pwdValid) {
+                return { success: false, message: pwdCheck.message };
+            }
+            const hashPassword = await bcrypt.hash(password as string, 10);
+            await prisma.users.update({
+                where: {
+                    email: user.email,
+                },
+                data: {
+                    password_hash: hashPassword,
+                }
+            });
+        } catch (error) {
+            return { success: false, message: "An error occurred during connection to the database." };
+        }
+    } else {
+        return {success: false, message: "User Not Authorized.",};
+    }
+    return await logoutUser();
+}
+
 export async function deleteUser() {
     const userSession = await getUserSession();
     if (userSession) {

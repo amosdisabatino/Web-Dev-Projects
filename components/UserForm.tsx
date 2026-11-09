@@ -55,9 +55,11 @@ export default function UserForm({mode, initialData, onSubmit, message, pwdmessa
             }
             {
                 mode === 'update' && (
-                    <div className="flex gap-4">
-                        <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Update Values</button>
-                        <Link href="/" className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Back Home</Link>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button type="submit" className="w-full text-center px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Update Values</button>
+                        <Link href="/change-password" className="w-full text-center block px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Change Password</Link>
+                        <Link href="/change-email" className="w-full text-center block px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Change Email</Link>
+                        <Link href="/" className="w-full text-center block px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm">Back Home</Link>
                     </div>
                 )
             }
