@@ -16,6 +16,40 @@ function getIsoDate(rawDate: string) {
     }
 }
 
+export async function changeMail(formData: FormData) {
+    const user = await getUserSession();
+    if (!user) {
+        return { success: false, message: "User Not Authorized.",};
+    }
+    const oldMail = formData.get('email') as string;
+    const newMail = formData.get('new_email') as string;
+    const confMail = formData.get('confirm_new_email') as string;
+    try {
+        const user = await prisma.users.findUnique({
+            where: {
+                email: oldMail,
+            }
+        })
+        if (!user) {
+            return {success: false, message: "The Current Email Is Incorrect.",};
+        }
+        if (newMail !== confMail){
+            return {success: false, message: "Emails do not match.",};
+        }
+        await prisma.users.update({
+            where: {
+                email: user.email,
+            },
+            data: {
+                email: confMail,
+            }
+        });
+    }catch (error) {
+        return { success: false, message: "An error occurred during connection to the database." };
+    }
+    return await logoutUser();
+}
+
 export async function changePassword(formData: FormData){
     const oldPassword = formData.get('old_password') as string;
     const password = formData.get('new_password') as string;
@@ -161,7 +195,7 @@ export async function updateUser(formData: FormData) {
                 delete rawData[key];
             }
         });
-        const { date_birth, ...updData } = rawData;
+        const { date_birth, email, ...updData } = rawData;
         const isoDate = getIsoDate(date_birth as string);
         try{
             await prisma.users.update({

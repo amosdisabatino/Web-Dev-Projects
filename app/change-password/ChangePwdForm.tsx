@@ -6,7 +6,7 @@ import { useState } from "react";
 
 export default function ChangePwdForm() {
     const [message, setMessage] = useState('');
-    
+
     async function handleChangePwd(event: React.SyntheticEvent<HTMLFormElement>) {
 
         event.preventDefault();
@@ -17,7 +17,7 @@ export default function ChangePwdForm() {
         if (!isConfirmed) {
             return;
         }
-        
+
         const response = await changePassword(formData);
         setMessage(response?.message as string);
     }
