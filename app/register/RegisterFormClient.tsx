@@ -1,7 +1,6 @@
 'use client';
 
 import { checkPassword } from '@/lib/validation';
-import { redirect } from 'next/navigation';
 import {registerUser} from '@/app/actions/auth';
 import { useState } from 'react';
 import Userform from '@/components/UserForm';
@@ -29,7 +28,6 @@ export default function RegisterFormClient() {
         setMessage(response.message as string);
         if (response.success) {
             form.reset();
-            redirect('/');
         }
     }
 

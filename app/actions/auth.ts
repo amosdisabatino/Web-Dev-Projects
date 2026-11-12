@@ -1,10 +1,12 @@
 'use server'
 import { checkPassword } from '@/lib/validation';
 import { cookies } from 'next/headers';
+import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from "next/cache";
+import { sendRegistrationMail } from '@/lib/emails/sendRegistrationMail';
 import { jwtVerify, SignJWT } from 'jose';
 
 function getIsoDate(rawDate: string) {
@@ -171,17 +173,45 @@ export async function registerUser(formData: FormData) {
     if (!pwdCheck.pwdValid) {
         return { success: false, message: pwdCheck.message };
     }
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    const appUrl = process.env.APP_URL;
+    if (!appUrl) {
+        throw new Error('Missing App URL.');
+    }
+
+    const verificationUrl = new URL('verify-email', appUrl);
+    verificationUrl.searchParams.set('token', token);
+
     try {
         const hashPassword = await bcrypt.hash(password as string, 10);
-        await prisma.users.create({
+        const user = await prisma.users.create({
             data: {
                 ...(regData as any),
                 password_hash: hashPassword,
                 date_birth: isoDate,
-            }
+                email_verified_at: null,
+                email_tokens: {
+                    create: {
+                        token_hash: tokenHash,
+                        purpose: 'REGISTER',
+                        expires_at: expiresAt,
+                    },
+                },
+            },
         });
-        return { success: true, message: "Register Done." };
+
+        try {
+            await sendRegistrationMail(user.email, verificationUrl.toString(),);
+        } catch {
+            return {success: false, message: "Account created, but the confirmation mail could not be sent."};
+        }
+
+        return { success: true, message: "Check Your Email To Confirm Your Registration." };
     } catch (error) {
+        console.error(error)
         return { success: false, message: "An error occurred during registration." };
     }
 }
