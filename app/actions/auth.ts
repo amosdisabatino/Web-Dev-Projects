@@ -123,6 +123,9 @@ export async function getUserSession() {
                 password_hash: true,
             }
         });
+        if (! user || !user.email_verified_at) {
+            return null;
+        }
         return user;
     } catch (error) {
         return null;
@@ -139,6 +142,9 @@ export async function loginUser(formData: FormData) {
             }
         })
         if (user && await bcrypt.compare(password, user.password_hash)) {
+            if (!user.email_verified_at) {
+                return { success: false, message: "Please confirm your email before logging in." }
+            }
             const secret = new TextEncoder().encode(process.env.JWT_SECRET);
             const token = await new SignJWT({ email: user.email })
                 .setProtectedHeader({alg:'HS256'})
@@ -245,4 +251,68 @@ export async function updateUser(formData: FormData) {
     } else {
         return { success: false, message: "User not authorized." }
     }
+}
+
+export async function verifyRegistrationEmail(formData:FormData) {
+
+    const token = formData.get('token');
+
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) {
+        redirect('/verify-email?status=invalid');
+    }
+    
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    let verified = false;
+
+    try {
+        verified = await prisma.$transaction(async (tx) => {
+            const emailToken = await tx.email_tokens.findUnique({
+                where: {
+                    token_hash: tokenHash,
+                },
+            });
+
+            if (!emailToken) {
+                return false;
+            }
+
+            const now = new Date();
+
+            const consumed = await tx.email_tokens.updateMany({
+                where: {
+                    id: emailToken.id,
+                    purpose: 'REGISTER',
+                    used_at: null,
+                    expires_at: {
+                        gt: now,
+                    },
+                },
+                data: {
+                    used_at: now,
+                },
+            });
+
+            if (consumed.count !== 1) {
+                return false;
+            }
+
+            await tx.users.update({
+                where: {
+                    id: emailToken.user_id,
+                },
+                data: {
+                    email_verified_at: now,
+                },
+            });
+
+            return true;
+
+        });
+    } catch {
+        redirect('verify-email?status=error');
+    }
+
+    redirect(verified ? 'verify-email?status=success' : 'verify-email?status=invalid');
+
 }
