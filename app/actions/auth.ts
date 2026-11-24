@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from "next/cache";
 import { sendRegistrationMail } from '@/lib/emails/sendRegistrationMail';
 import { jwtVerify, SignJWT } from 'jose';
+import { use } from 'react';
 
 function getIsoDate(rawDate: string) {
     if (rawDate) {
@@ -219,6 +220,73 @@ export async function registerUser(formData: FormData) {
     } catch (error) {
         console.error(error)
         return { success: false, message: "An error occurred during registration." };
+    }
+}
+
+export async function sendVerificationMail(formData:FormData) {
+    const email = formData.get('email') as string;
+    try{
+        const user = await prisma.users.findUnique({
+            where: {
+                email: email,
+            }
+        })
+        if (user) {
+
+            if (user.email_verified_at) {
+                return { success: false, message: "User already verified." }
+            }
+
+            const appUrl = process.env.APP_URL;
+            if (!appUrl) {
+                throw new Error('Missing App URL.');
+            }
+    
+            const token = randomBytes(32).toString('hex');
+            const tokenHash = createHash('sha256').update(token).digest('hex');
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+            const verificationUrl = new URL('verify-email', appUrl);
+            verificationUrl.searchParams.set('token', token);
+
+            const now = new Date();
+
+            try {
+
+                await prisma.email_tokens.updateMany({
+                    where: {
+                        user_id: user.id,
+                        purpose: 'REGISTER',
+                        used_at: null,
+                        expires_at: { gt: now },
+                    },
+                    data: {expires_at: now},
+                })
+
+                await prisma.email_tokens.create({
+                    data: {
+                        token_hash: tokenHash,
+                        purpose: 'REGISTER',
+                        expires_at: expiresAt,
+                        user_id: user.id,
+                    },
+                });
+
+                try {
+                    await sendRegistrationMail(user.email, verificationUrl.toString(),);
+                } catch {
+                    return {success: false, message: "The confirmation mail could not be sent."};
+                }
+
+                return { success: true, message: "Check Your Email To Confirm Your Registration." };
+
+            } catch (error) {
+                return {success: false, message: "An error occuring during the creation of the email."};
+            }
+        }
+        return {success: false, message: "User not found."}
+    } catch (error) {
+        return {success: false, message: "An error occurred during login"};
     }
 }
 
