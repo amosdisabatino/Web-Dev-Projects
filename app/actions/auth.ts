@@ -6,9 +6,9 @@ import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from "next/cache";
+import { sendChangeMail } from '@/lib/emails/sendChangeMail';
 import { sendRegistrationMail } from '@/lib/emails/sendRegistrationMail';
 import { jwtVerify, SignJWT } from 'jose';
-import { use } from 'react';
 
 function getIsoDate(rawDate: string) {
     if (rawDate) {
@@ -24,33 +24,54 @@ export async function changeMail(formData: FormData) {
     if (!user) {
         return { success: false, message: "User Not Authorized.",};
     }
-    const oldMail = formData.get('email') as string;
     const newMail = formData.get('new_email') as string;
     const confMail = formData.get('confirm_new_email') as string;
     try {
-        const user = await prisma.users.findUnique({
-            where: {
-                email: oldMail,
-            }
-        })
-        if (!user) {
-            return {success: false, message: "The Current Email Is Incorrect.",};
-        }
+
         if (newMail !== confMail){
             return {success: false, message: "Emails do not match.",};
         }
-        await prisma.users.update({
+
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+        const now = new Date();
+
+        await prisma.email_tokens.updateMany({
             where: {
-                email: user.email,
+                user_id: user.id,
+                purpose: 'CHANGE_EMAIL',
+                used_at: null,
+                expires_at: { gt: now },
             },
+            data: {expires_at: now},
+        })
+
+        await prisma.email_tokens.create({
             data: {
-                email: confMail,
+                user_id: user.id,
+                token_hash: tokenHash,
+                purpose: 'CHANGE_EMAIL',
+                pending_email: newMail,
+                expires_at: expiresAt,
             }
         });
+
+        const appUrl = process.env.APP_URL;
+        const verificationMailUrl = new URL('change-email-confirm', appUrl);
+        verificationMailUrl.searchParams.set('token', token);
+
+        try {
+            await sendChangeMail(newMail, verificationMailUrl.toString(),);
+        } catch {
+            return {success: false, message: "The verification mail could not be sent."};
+        }
+        return { success: true, message: "Check your email to confirm the changes." };
+
     }catch (error) {
-        return { success: false, message: "An error occurred during connection to the database." };
+        return { success: false, message: "An error occurred during email verification." };
     }
-    return await logoutUser();
 }
 
 export async function changePassword(formData: FormData){
@@ -218,7 +239,6 @@ export async function registerUser(formData: FormData) {
 
         return { success: true, message: "Check Your Email To Confirm Your Registration." };
     } catch (error) {
-        console.error(error)
         return { success: false, message: "An error occurred during registration." };
     }
 }
@@ -319,6 +339,83 @@ export async function updateUser(formData: FormData) {
     } else {
         return { success: false, message: "User not authorized." }
     }
+}
+
+export async function verifyChangeEmail(formData:FormData) {
+
+    const token = formData.get('token');
+
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) {
+        redirect('/verify-email?status=invalid');
+    }
+    
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    let verified = false;
+
+    const user = await getUserSession();
+
+    if(!user) {
+        redirect('/login');
+    }
+
+    try {
+        verified = await prisma.$transaction(async (tx) => {
+            const emailToken = await tx.email_tokens.findUnique({
+                where: {
+                    token_hash: tokenHash,
+                },
+            });
+
+            if (!emailToken?.pending_email || emailToken.user_id !== user.id) {
+                return false;
+            }
+
+            const now = new Date();
+
+            const consumed = await tx.email_tokens.updateMany({
+                where: {
+                    id: emailToken.id,
+                    purpose: 'CHANGE_EMAIL',
+                    used_at: null,
+                    expires_at: {
+                        gt: now,
+                    },
+                },
+                data: {
+                    used_at: now,
+                },
+            });
+
+            if (consumed.count !== 1) {
+                return false;
+            }
+
+            await tx.users.update({
+                where: {
+                    id: emailToken.user_id,
+                },
+                data: {
+                    email_verified_at: now,
+                    email: emailToken.pending_email,
+                },
+            });
+
+            return true;
+
+        });
+    } catch {
+        redirect('verify-email?status=error');
+    }
+
+    if (verified) {
+        const cookieStore = await cookies();
+        cookieStore.delete('session');
+        redirect('/change-email-confirm?status=success');
+    }
+
+    redirect('/change-email-confirm?status=invalid');
+
 }
 
 export async function verifyRegistrationEmail(formData:FormData) {
